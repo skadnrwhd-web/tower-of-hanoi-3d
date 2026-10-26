@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Tower of Hanoi 3D</title>
+<meta name="description" content="A realistic wooden 3D Tower of Hanoi. Drag disks and watch the code light up.">
+
+<!-- Three.js를 CDN에서 불러옴 (빌드 도구 없이 단일 파일 유지) -->
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<style>
+  :root { --wood:#c89b62; --wood-dark:#5a3a1e; --ink:#2a1a0c; --cream:#f6e9d2; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#1b1209; color:var(--cream);
+    font-family: Georgia, "Times New Roman", serif; overscroll-behavior:none; }
+  canvas { display:block; touch-action:none; -webkit-touch-callout:none; user-select:none; }
+  #hud { position:fixed; left:0; right:0; top:0; padding:10px 12px; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  .bar { pointer-events:auto; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .panel { background:rgba(42,26,12,.82); border:1px solid rgba(255,220,160,.25); border-radius:14px;
+    padding:6px 10px; backdrop-filter:blur(6px); }
+  .title { font-weight:700; letter-spacing:.12em; font-size:13px; }
+  .stat small { display:block; font-size:9px; letter-spacing:.15em; opacity:.6; text-transform:uppercase; }
+  .stat b { font-size:16px; font-variant-numeric:tabular-nums; }
+  button { font-family:inherit; cursor:pointer; color:var(--cream); background:rgba(90,58,30,.9);
+    border:1px solid rgba(255,220,160,.35); border-radius:999px; padding:6px 12px; font-size:12px; font-weight:700; }
+  button:hover { background:rgba(120,78,40,.95); }
+  button.on { background:var(--cream); color:var(--ink); }
+  .disks button { width:26px; height:26px; padding:0; }
+  #code { position:fixed; left:50%; transform:translateX(-50%); bottom:10px; width:min(560px, calc(100vw - 20px));
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; line-height:1.55; padding:8px 10px; pointer-events:none; }
+  #code .ln { padding:0 6px; border-radius:6px; white-space:pre; overflow:hidden; opacity:.55; transition:background .15s, opacity .15s; }
+  #code .ln.lit { opacity:1; background:rgba(255,200,90,.28); box-shadow:inset 3px 0 0 #ffc85a; }
+  #code .ln.ok { opacity:1; background:rgba(110,220,130,.25); box-shadow:inset 3px 0 0 #6edc82; }
+  #code .ln.bad { opacity:1; background:rgba(240,90,90,.28); box-shadow:inset 3px 0 0 #f05a5a; }
+  #code .cm { color:#a58b66; }
+  #live { font-size:11px; opacity:.8; padding:0 6px 4px; }
+  #toast { position:fixed; left:50%; top:96px; transform:translateX(-50%); padding:8px 14px; border-radius:999px;
+    background:rgba(42,26,12,.9); border:1px solid rgba(255,220,160,.35); font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; }
+  #toast.show { opacity:1; }
+  #clear { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,6,2,.7); padding:16px; }
+  #clear.show { display:flex; }
+  .card { width:min(420px,100%); background:linear-gradient(160deg,#6b4423,#3b2411); border:2px solid #d9a860;
+    border-radius:20px; padding:20px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  .card h2 { margin:0 0 4px; font-size:26px; }
+  .card p { margin:4px 0 12px; opacity:.85; font-size:14px; }
+  .card h3 { margin:16px 0 8px; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:#ffd89a; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  a.btn { display:block; text-decoration:none; color:var(--cream); background:rgba(0,0,0,.28); border:1px solid rgba(255,220,160,.4);
+    border-radius:12px; padding:10px 4px; font-size:12px; font-weight:700; }
+  a.btn:hover { background:rgba(255,220,160,.2); }
+  a.coffee { display:block; margin-top:10px; text-decoration:none; background:#ffdd00; color:#1b1209; border-radius:12px;
+    padding:11px 8px; font-weight:800; font-size:13px; }
+  .again { margin-top:12px; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="bar">
+    <div class="panel title">TOWER OF HANOI · 3D</div>
+    <div class="panel stat"><small>Moves</small><b id="moves">0</b></div>
+    <div class="panel stat"><small>Best</small><b id="best">-</b></div>
+    <div class="panel disks bar" id="disksBar"><small style="font-size:9px;letter-spacing:.15em;opacity:.6">DISKS</small></div>
+  </div>
+  <div class="bar" id="modes">
+    <button data-mode="classic" class="on">Classic</button>
+    <button data-mode="random">Random Shuffle</button>
+    <button data-mode="chaos">Chaos Mode</button>
+    <button id="reset">Reset</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- 드래그할 때 불이 켜지는 코드 패널 -->
+<div id="code" class="panel">
+  <div id="live">drag a disk…</div>
+  <div class="ln" data-l="0">disk = top(src)            <span class="cm"># 1. pick the top disk</span></div>
+  <div class="ln" data-l="1">if disk &lt; top(dst):        <span class="cm"># 2. must be smaller</span></div>
+  <div class="ln" data-l="2">    place(disk, dst)       <span class="cm"># 3. drop it</span></div>
+  <div class="ln" data-l="3">    moves += 1</div>
+  <div class="ln" data-l="4">else: return_to(src)       <span class="cm"># illegal → back</span></div>
+</div>
+
+<!-- 클리어 화면: 다른 장난감 + 후원 버튼 -->
+<div id="clear">
+  <div class="card">
+    <h2>🎉 Cleared!</h2>
+    <p id="clearInfo"></p>
+    <h3>More Algorithm Toys</h3>
+    <div class="grid">
+      <a class="btn" href="https://github.com/skadnrwhd-web/seoul-escape" target="_blank" rel="noopener">Seoul Escape</a>
+      <a class="btn" href="https://github.com/skadnrwhd-web/geoje-dijkstra" target="_blank" rel="noopener">Geoje Dijkstra</a>
+      <a class="btn" href="https://github.com/skadnrwhd-web/water-ring-game" target="_blank" rel="noopener">Water Ring Game</a>
+    </div>
+    <a class="coffee" href="https://buymeacoffee.com/ujnam80" target="_blank" rel="noopener">☕️ Buy me a coffee to build Busan map next</a>
+    <button class="again" id="again">Play again</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================================================
+   1. 기본 설정값
+   ============================================================ */
+const PEG_X = [-4.4, 0, 4.4];      // 기둥 3개의 가로 위치
+const DISK_H = 0.42;               // 원판 두께
+const BASE_Y = 0.35;               // 받침판 윗면 높이
+const LIFT_Y = 4.6;                // 드래그 중 원판 높이 (Y축 고정값)
+const NAMES = ['A', 'B', 'C'];
+const WOODS = [0xd9a066, 0xb9783c, 0x8f5a2e, 0xc98a52, 0xa86a35, 0xe0b27a, 0x7a4a24]; // 원판 색(나무 종류)
+
+let diskCount = 5;                 // 원판 개수 (3~7)
+let mode = 'classic';              // classic | random | chaos
+let pegs = [[], [], []];           // 각 기둥에 쌓인 원판 번호 (맨 앞=맨 아래)
+let moves = 0;
+let disks = [];                    // 3D 원판 객체들
+let drag = null;                   // 현재 드래그 상태
+let solved = false;
+
+/* ============================================================
+   2. 장면 / 카메라 / 조명
+   ============================================================ */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a1a0c);
+scene.fog = new THREE.Fog(0x2a1a0c, 26, 55);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+
+scene.add(new THREE.HemisphereLight(0xfff1d6, 0x6a4526, 1.5));
+const sun = new THREE.DirectionalLight(0xffe2b0, 2.6);
+sun.position.set(-6, 14, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+
+/* ============================================================
+   3. 나무 질감 (그림 파일 없이 코드로 직접 그림)
+   ============================================================ */
+function makeWoodTexture(base = '#d8b27a', grain = '#8a5a2b') {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = base; g.fillRect(0, 0, 512, 512);
+  // 나뭇결: 살짝 휘어진 가로 선 여러 개
+  for (let i = 0; i < 90; i++) {
+    const y = Math.random() * 512, a = 2 + Math.random() * 6, f = 0.004 + Math.random() * 0.012;
+    g.strokeStyle = grain; g.globalAlpha = 0.05 + Math.random() * 0.18;
+    g.lineWidth = 0.6 + Math.random() * 2.2;
+    g.beginPath();
+    for (let x = 0; x <= 512; x += 8) g.lineTo(x, y + Math.sin(x * f + i) * a);
+    g.stroke();
+  }
+  // 옹이 몇 개
+  for (let k = 0; k < 2; k++) {
+    const x = Math.random() * 512, y = Math.random() * 512;
+    for (let r = 26; r > 2; r -= 4) {
+      g.globalAlpha = 0.07; g.strokeStyle = grain; g.lineWidth = 1.6;
+      g.beginPath(); g.ellipse(x, y, r * 1.8, r, 0, 0, Math.PI * 2); g.stroke();
+    }
+  }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+const woodLight = makeWoodTexture('#e2bd86', '#8a5a2b');
+const woodDark  = makeWoodTexture('#8a5a30', '#3b2210');
+
+/* ============================================================
+   4. 받침판 + 기둥 + 바닥
+   ============================================================ */
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60),
+  new THREE.MeshStandardMaterial({ color: 0x4a2f19, roughness: 0.95 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -0.3; floor.receiveShadow = true;
+scene.add(floor);
+
+const baseTex = woodDark.clone(); baseTex.repeat.set(3, 1); baseTex.needsUpdate = true;
+const base = new THREE.Mesh(new THREE.BoxGeometry(14.2, 0.7, 5),
+  new THREE.MeshStandardMaterial({ map: baseTex, roughness: 0.55, metalness: 0.02 }));
+base.position.y = BASE_Y - 0.35; base.castShadow = base.receiveShadow = true;
+scene.add(base);
+
+const pegMeshes = [];
+const pegMat = () => new THREE.MeshStandardMaterial({ map: woodLight, roughness: 0.5, emissive: 0x000000 });
+function buildPegs() {
+  pegMeshes.forEach(p => scene.remove(p));
+  pegMeshes.length = 0;
+  const h = diskCount * DISK_H + 1.4;
+  PEG_X.forEach(x => {
+    const peg = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, h, 28), pegMat());
+    peg.position.set(x, BASE_Y + h / 2, 0);
+    peg.castShadow = peg.receiveShadow = true;
+    scene.add(peg); pegMeshes.push(peg);
+  });
+}
+
+/* ============================================================
+   5. 원판 만들기 (가운데 구멍 뚫린 둥근 링)
+   ============================================================ */
+function diskRadius(k) {                       // k: 0(가장 작음) ~ diskCount-1(가장 큼)
+  const min = 0.78, max = 1.85;
+  return diskCount === 1 ? max : min + (max - min) * k / (diskCount - 1);
+}
+function makeDiskMesh(k) {
+  const R = diskRadius(k), r = 0.27, h = DISK_H, b = 0.09;   // 바깥/안쪽 반지름, 두께, 모서리 둥글기
+  // 단면 모양을 만들고 회전시키면 구멍 뚫린 링이 된다 (LatheGeometry)
+  const pts = [
+    new THREE.Vector2(r, -h / 2 + b), new THREE.Vector2(r + b * .3, -h / 2),
+    new THREE.Vector2(R - b, -h / 2), new THREE.Vector2(R, -h / 2 + b),
+    new THREE.Vector2(R, h / 2 - b), new THREE.Vector2(R - b, h / 2),
+    new THREE.Vector2(r + b * .3, h / 2), new THREE.Vector2(r, h / 2 - b),
+    new THREE.Vector2(r, -h / 2 + b)
+  ];
+  const geo = new THREE.LatheGeometry(pts, 56);
+  const tex = woodLight.clone(); tex.repeat.set(1.5, 0.4); tex.rotation = Math.random() * 3; tex.needsUpdate = true;
+  const mat = new THREE.MeshStandardMaterial({ map: tex, color: WOODS[k % WOODS.length], roughness: 0.45, metalness: 0.03, emissive: 0x000000 });
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = m.receiveShadow = true;
+  m.userData = { k, pos: new THREE.Vector3(), target: new THREE.Vector3() };
+  return m;
+}
+function stackY(level) { return BASE_Y + DISK_H / 2 + level * DISK_H; }   // 쌓인 층수 → 높이
+
+/* ============================================================
+   6. 게임 상태 만들기 (모드별 시작 배치)
+   ============================================================ */
+function buildBoard() {
+  disks.forEach(d => scene.remove(d)); disks = [];
+  buildPegs();
+  for (let k = 0; k < diskCount; k++) {
+    const d = makeDiskMesh(k); disks.push(d); scene.add(d);
+  }
+  // 큰 원판부터 아래에 쌓이도록 pegs 구성 (값 = 원판 크기 번호 k)
+  pegs = [[], [], []];
+  if (mode === 'classic') {
+    for (let k = diskCount - 1; k >= 0; k--) pegs[0].push(k);
+  } else {
+    do {                                       // 이미 완성된 상태로 시작하지 않도록 반복
+      pegs = [[], [], []];
+      for (let k = diskCount - 1; k >= 0; k--) pegs[Math.floor(Math.random() * 3)].push(k);
+    } while (pegs[2].length === diskCount);
+  }
+  moves = 0; solved = false;
+  syncAll(true);
+  updateHud();
+}
+function syncAll(snap) {                       // pegs 배열 → 3D 위치 반영
+  pegs.forEach((stack, p) => stack.forEach((k, level) => {
+    const d = disks[k];
+    d.userData.target.set(PEG_X[p], stackY(level), 0);
+    if (snap) d.userData.pos.copy(d.userData.target);
+  }));
+}
+const top = p => pegs[p][pegs[p].length - 1];
+const canPlace = (k, p) => pegs[p].length === 0 || k < top(p);
+
+/* ============================================================
+   7. 입력: 화면을 3등분(존)으로 나눠 드래그 (모바일 친화)
+   ============================================================ */
+const zoneOf = x => Math.min(2, Math.max(0, Math.floor(x / window.innerWidth * 3)));
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);   // 원판이 움직이는 평면 (z=0)
+const ray = new THREE.Raycaster();
+function pointerToWorldX(cx, cy) {
+  ray.setFromCamera(new THREE.Vector2(cx / innerWidth * 2 - 1, -(cy / innerHeight) * 2 + 1), camera);
+  const hit = new THREE.Vector3();
+  return ray.ray.intersectPlane(plane, hit) ? hit.x : 0;
+}
+
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (solved || drag) return;
+  const src = zoneOf(e.clientX);
+  if (!pegs[src].length) return;
+  const k = top(src);                                         // 코드 1단계: 맨 위 원판 집기
+  drag = { k, src, dst: src };
+  renderer.domElement.setPointerCapture(e.pointerId);
+  light(0); setLive(k, src, src);
+  moveDrag(e);
+});
+renderer.domElement.addEventListener('pointermove', e => { if (drag) moveDrag(e); });
+renderer.domElement.addEventListener('pointerup', endDrag);
+renderer.domElement.addEventListener('pointercancel', () => { if (drag) { drag.dst = drag.src; endDrag(); } });
+
+function moveDrag(e) {
+  const x = THREE.MathUtils.clamp(pointerToWorldX(e.clientX, e.clientY), PEG_X[0] - 1.5, PEG_X[2] + 1.5);
+  disks[drag.k].userData.target.set(x, LIFT_Y, 0);            // Y는 항상 LIFT_Y로 고정, X만 따라감
+  drag.dst = zoneOf(e.clientX);
+  // 목표 기둥 하이라이트 + 코드 2단계 판정
+  const ok = drag.dst === drag.src ? null : canPlace(drag.k, drag.dst);
+  pegMeshes.forEach((m, i) => m.material.emissive.setHex(i !== drag.dst || ok === null ? 0x000000 : (ok ? 0x1f6b2a : 0x7a1c1c)));
+  if (ok === null) light(0); else light(1, ok ? 'ok' : 'bad');
+  setLive(drag.k, drag.src, drag.dst);
+}
+function endDrag() {
+  if (!drag) return;
+  const { k, src, dst } = drag; drag = null;
+  pegMeshes.forEach(m => m.material.emissive.setHex(0x000000));
+  if (dst !== src && canPlace(k, dst)) {                      // 코드 3~4단계: 내려놓기 + 이동 횟수 +1
+    pegs[src].pop(); pegs[dst].push(k); moves++;
+    light(2, 'ok'); setTimeout(() => light(3, 'ok'), 120);
+    afterMove();
+  } else {                                                    // 규칙 위반이거나 제자리 → 되돌리기
+    if (dst !== src) { light(4, 'bad'); toast('A bigger disk cannot go on a smaller one'); }
+    else light(-1);
+  }
+  syncAll(false);
+}
+function afterMove() {
+  updateHud();
+  if (pegs[2].length === diskCount) { solved = true; setTimeout(showClear, 700); return; }
+  // Chaos Mode: 3번 움직일 때마다 게임이 무작위로 원판 하나를 옮겨 버린다
+  if (mode === 'chaos' && moves % 3 === 0) setTimeout(chaosMove, 500);
+}
+function chaosMove() {
+  const options = [];
+  for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++)
+    if (a !== b && pegs[a].length && canPlace(top(a), b)) options.push([a, b]);
+  if (!options.length) return;
+  const [a, b] = options[Math.floor(Math.random() * options.length)];
+  pegs[b].push(pegs[a].pop());
+  toast('🌪 Chaos! ' + NAMES[a] + ' → ' + NAMES[b]);
+  syncAll(false);
+  if (pegs[2].length === diskCount) { solved = true; setTimeout(showClear, 700); }
+}
+
+/* ============================================================
+   8. 화면 UI (이동 횟수, 최고 기록, 코드 불 켜기, 알림)
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const bestKey = () => `hanoi3d_best_${mode}_${diskCount}`;
+function getBest() { try { return Number(localStorage.getItem(bestKey())) || 0; } catch { return 0; } }
+function setBest(v) { try { localStorage.setItem(bestKey(), v); } catch {} }
+function updateHud() { $('moves').textContent = moves; const b = getBest(); $('best').textContent = b ? b : '-'; }
+
+function light(i, cls = 'lit') {
+  document.querySelectorAll('#code .ln').forEach(el => el.classList.remove('lit', 'ok', 'bad'));
+  const el = document.querySelector(`#code .ln[data-l="${i}"]`);
+  if (el) el.classList.add(cls);
+}
+function setLive(k, src, dst) {
+  $('live').textContent = `disk=${k + 1}  src=${NAMES[src]}  dst=${NAMES[dst]}  top(dst)=${pegs[dst].length && dst !== src ? top(dst) + 1 : '-'}`;
+}
+let toastTimer;
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+
+function showClear() {
+  const prev = getBest(); const record = !prev || moves < prev;
+  if (record) setBest(moves);
+  $('clearInfo').textContent = `${moves} moves` + (record ? ' · 🏆 New best!' : ` · Best ${prev}`);
+  updateHud();
+  $('clear').classList.add('show');
+}
+
+// 원판 개수 버튼 3~7
+const disksBar = $('disksBar');
+for (let n = 3; n <= 7; n++) {
+  const b = document.createElement('button'); b.textContent = n; b.dataset.n = n;
+  if (n === diskCount) b.classList.add('on');
+  b.onclick = () => { diskCount = n; disksBar.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); restart(); };
+  disksBar.appendChild(b);
+}
+$('modes').querySelectorAll('button[data-mode]').forEach(b => b.onclick = () => {
+  mode = b.dataset.mode;
+  $('modes').querySelectorAll('button[data-mode]').forEach(x => x.classList.toggle('on', x === b));
+  restart();
+});
+$('reset').onclick = () => restart();
+$('again').onclick = () => restart();
+function restart() { $('clear').classList.remove('show'); drag = null; light(-1); $('live').textContent = 'drag a disk…'; buildBoard(); fitCamera(); }
+
+/* ============================================================
+   9. 화면 크기에 맞춰 카메라 거리 조정 (세로 화면이면 더 멀리)
+   ============================================================ */
+function fitCamera() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h;
+  const need = 12.4;                                          // 가로로 보여야 하는 폭
+  const dist = Math.max(15, need / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) * 1.05);
+  camera.position.set(0, 7.2 + (diskCount - 5) * 0.2, dist);
+  camera.lookAt(0, 2.4, 0);
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', fitCamera);
+
+/* ============================================================
+   10. 애니메이션 루프 (부드럽게 따라오기)
+   ============================================================ */
+const clock = new THREE.Clock();
+function loop() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const a = 1 - Math.exp(-14 * dt);                           // 프레임 속도와 무관한 감쇠
+  disks.forEach(d => {
+    const { pos, target } = d.userData;
+    pos.lerp(target, a);
+    d.position.copy(pos);
+    d.rotation.z = (target.x - pos.x) * 0.06;                 // 끌 때 살짝 기울어짐
+  });
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+buildBoard(); fitCamera(); loop();
+window.__hanoi = { get pegs() { return pegs; }, get moves() { return moves; }, zoneOf };  // 테스트용 읽기 전용 노출
+</script>
+</body>
+</html>
