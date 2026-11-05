@@ -47,7 +47,9 @@
   .card h2 { margin:0 0 4px; font-size:26px; }
   .card p { margin:4px 0 12px; opacity:.85; font-size:14px; }
   .card h3 { margin:16px 0 8px; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:#ffd89a; }
-  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  a.btn.next { grid-column:1/-1; background:#ffc85a; color:#1b1209; border-color:#ffc85a; font-size:13px; }
+  a.btn.next:hover { background:#ffd47a; }
   a.btn { display:block; text-decoration:none; color:var(--cream); background:rgba(0,0,0,.28); border:1px solid rgba(255,220,160,.4);
     border-radius:12px; padding:10px 4px; font-size:12px; font-weight:700; }
   a.btn:hover { background:rgba(255,220,160,.2); }
@@ -92,6 +94,7 @@
     <p id="clearInfo"></p>
     <h3>More Algorithm Toys</h3>
     <div class="grid">
+      <a class="btn next" href="https://skadnrwhd-web.github.io/tower-of-hanoi-3d-2/" target="_blank" rel="noopener">▶ Part 2 · 4 Pegs (new!)</a>
       <a class="btn" href="https://github.com/skadnrwhd-web/seoul-escape" target="_blank" rel="noopener">Seoul Escape</a>
       <a class="btn" href="https://github.com/skadnrwhd-web/geoje-dijkstra" target="_blank" rel="noopener">Geoje Dijkstra</a>
       <a class="btn" href="https://github.com/skadnrwhd-web/water-ring-game" target="_blank" rel="noopener">Water Ring Game</a>

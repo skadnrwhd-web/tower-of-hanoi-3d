@@ -5,6 +5,8 @@
 A realistic wooden 3D Tower of Hanoi. Drag a disk and watch the code light up.
 Part of my "algorithm toys" series.
 
+👉 **[Part 2 · 4 Pegs (Frame-Stewart)](https://skadnrwhd-web.github.io/tower-of-hanoi-3d-2/)** is out. Four pegs, optimal move count, and auto-solve.
+
 ## Features
 - Classic / Random Shuffle / Chaos Mode
 - Drag & drop with shadows and procedural wood texture
