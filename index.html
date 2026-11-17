@@ -121,6 +121,7 @@ let diskCount = 5;                 // 원판 개수 (3~7)
 let mode = 'classic';              // classic | random | chaos
 let pegs = [[], [], []];           // 각 기둥에 쌓인 원판 번호 (맨 앞=맨 아래)
 let moves = 0;
+let rankT0 = 0;                  // 랭킹용: 첫 이동 시각
 let disks = [];                    // 3D 원판 객체들
 let drag = null;                   // 현재 드래그 상태
 let solved = false;
@@ -258,7 +259,7 @@ function buildBoard() {
       for (let k = diskCount - 1; k >= 0; k--) pegs[Math.floor(Math.random() * 3)].push(k);
     } while (pegs[2].length === diskCount);
   }
-  moves = 0; solved = false;
+  moves = 0; solved = false; rankT0 = 0;
   syncAll(true);
   updateHud();
 }
@@ -313,7 +314,7 @@ function endDrag() {
   const { k, src, dst } = drag; drag = null;
   pegMeshes.forEach(m => m.material.emissive.setHex(0x000000));
   if (dst !== src && canPlace(k, dst)) {                      // 코드 3~4단계: 내려놓기 + 이동 횟수 +1
-    pegs[src].pop(); pegs[dst].push(k); moves++;
+    pegs[src].pop(); pegs[dst].push(k); moves++; if (!rankT0) rankT0 = Date.now();
     light(2, 'ok'); setTimeout(() => light(3, 'ok'), 120);
     afterMove();
   } else {                                                    // 규칙 위반이거나 제자리 → 되돌리기
@@ -366,6 +367,7 @@ function showClear() {
   $('clearInfo').textContent = `${moves} moves` + (record ? ' · 🏆 New best!' : ` · Best ${prev}`);
   updateHud();
   $('clear').classList.add('show');
+  if (mode === 'classic' && true && window.ArcadeRank && rankT0) ArcadeRank.show({ id: 'hanoi3d-' + diskCount, score: moves * 10000 + Math.min(9999, Math.max(1, Math.round((Date.now() - rankT0) / 1000))), cancelIf: function () { return !$('clear').classList.contains('show'); } });
 }
 
 // 원판 개수 버튼 3~7
@@ -419,5 +421,6 @@ function loop() {
 buildBoard(); fitCamera(); loop();
 window.__hanoi = { get pegs() { return pegs; }, get moves() { return moves; }, zoneOf };  // 테스트용 읽기 전용 노출
 </script>
+<script src="https://skadnrwhd-web.github.io/arcade/rank.js"></script>
 </body>
 </html>
